@@ -18,6 +18,7 @@ import { UsableBadge } from "@/components/asset/UsableBadge";
 import { useAssetLink } from "@/lib/useAssetLink";
 import { exportToCsv } from "@/lib/export-csv";
 import { formatDateID, formatDays } from "@/lib/format";
+import { CALIBRATION_STATUS_LABEL } from "@/config/statusMaps";
 
 export function AssetTable({ assets, torque = false }: { assets: Asset[]; torque?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -41,8 +42,36 @@ export function AssetTable({ assets, torque = false }: { assets: Asset[]; torque
       {
         accessorKey: "compliance",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status={row.original.compliance} torque={torque} />,
+        cell: ({ row }) => <StatusBadge status={row.original.compliance} torque={torque} asset={row.original} />,
       },
+      ...(torque
+        ? ([
+            {
+              id: "external",
+              header: "Kalibrasi Eksternal",
+              cell: ({ row }) => {
+                const e = row.original.externalCalibration;
+                return e ? CALIBRATION_STATUS_LABEL[e.status] : "—";
+              },
+            },
+            {
+              id: "lastCal",
+              header: "Kalibrasi Terakhir",
+              accessorFn: (a) => a.externalCalibration?.lastCalibration?.getTime() ?? 0,
+              cell: ({ row }) => formatDateID(row.original.externalCalibration?.lastCalibration),
+            },
+            {
+              id: "monthly",
+              header: "Cek Bulanan",
+              cell: ({ row }) =>
+                row.original.hasMonthlyCheck === false ? (
+                  <span className="text-xs text-muted-foreground">Belum ada cek bulanan</span>
+                ) : (
+                  (row.original.lastCheck?.period ?? "—")
+                ),
+            },
+          ] as ColumnDef<Asset>[])
+        : []),
       {
         accessorKey: "daysToExpiry",
         header: "Sisa",

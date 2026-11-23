@@ -1,0 +1,5 @@
+{
+  "sertifikasi": "sertifikasi-peralatan.xlsx",
+  "torque": "kalibrasi-torque-wrench.xlsx",
+  "verifikasi": ["verifikasi/verifikasi-2026-10.xlsx", "verifikasi/verifikasi-2026-11.xlsx"]
+}

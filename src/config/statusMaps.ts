@@ -1,4 +1,4 @@
-import type { ComplianceStatus, VerificationResult } from "@/domain/types";
+import type { CalibrationStatus, ComplianceStatus, VerificationResult } from "@/domain/types";
 
 export const COMPLIANCE_LABEL: Record<ComplianceStatus, string> = {
   VALID: "Berlaku",
@@ -77,5 +77,56 @@ export function mapVerificationResult(raw: unknown): {
       return { result: "MISSING", unmapped: false };
     default:
       return { result: "UNKNOWN", unmapped: true };
+  }
+}
+
+export const CALIBRATION_STATUS_LABEL: Record<CalibrationStatus, string> = {
+  CALIBRATED: "Terkalibrasi",
+  NEED_CALIBRATION: "Perlu Kalibrasi",
+  ON_PROGRESS: "Proses Kalibrasi (di vendor/PO)",
+  DAMAGE: "Rusak",
+  UNKNOWN: "Tidak Dikenal",
+};
+
+export const CALIBRATION_STATUS_TOKEN: Record<CalibrationStatus, string> = {
+  CALIBRATED: "var(--status-ok)",
+  NEED_CALIBRATION: "var(--status-urgent)",
+  ON_PROGRESS: "var(--status-info)",
+  DAMAGE: "var(--status-danger)",
+  UNKNOWN: "var(--status-muted)",
+};
+
+/** Maps raw `Status` column of the v2 verification sheet. */
+export function mapCalibrationStatus(raw: unknown): { status: CalibrationStatus; unmapped: boolean } {
+  const s = String(raw ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+  switch (s) {
+    case "CALIBRATED":
+      return { status: "CALIBRATED", unmapped: false };
+    case "NEED CALIBRATION":
+      return { status: "NEED_CALIBRATION", unmapped: false };
+    case "ON PROGRESS":
+      return { status: "ON_PROGRESS", unmapped: false };
+    case "DAMAGE":
+      return { status: "DAMAGE", unmapped: false };
+    default:
+      return { status: "UNKNOWN", unmapped: true };
+  }
+}
+
+/** Status used by period-to-period comparison; v1 results are mapped to the closest v2 status. */
+export function calibrationStatusFromResult(r: VerificationResult): CalibrationStatus {
+  switch (r) {
+    case "OK":
+      return "CALIBRATED";
+    case "DUE_CALIBRATION":
+      return "NEED_CALIBRATION";
+    case "AT_VENDOR":
+      return "ON_PROGRESS";
+    case "NOT_OK":
+    case "REPLACE":
+    case "MISSING":
+      return "DAMAGE";
+    default:
+      return "UNKNOWN";
   }
 }

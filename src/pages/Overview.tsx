@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Card } from "@/components/ui/card";
 import {
   PieChart,
   Pie,
@@ -24,9 +26,10 @@ import {
   complianceComposition,
   compliancePerArea,
   actionItems,
+  changeSummary,
 } from "@/domain/selectors";
 import { COMPLIANCE_LABEL, COMPLIANCE_TOKEN } from "@/config/statusMaps";
-import { formatDays } from "@/lib/format";
+import { formatDays, formatMonthID } from "@/lib/format";
 
 export function Overview() {
   const assets = useFilteredAssets();
@@ -39,6 +42,7 @@ export function Overview() {
   const composition = useMemo(() => complianceComposition(assets), [assets]);
   const perArea = useMemo(() => compliancePerArea(assets), [assets]);
   const actions = useMemo(() => actionItems(assets).slice(0, 25), [assets]);
+  const change = useMemo(() => (model ? changeSummary(model) : null), [model]);
 
   if (!model) return null;
 
@@ -68,6 +72,21 @@ export function Overview() {
           )}
         </div>
 
+        {change?.from && change.to && (
+          <Link to="/alat-ukur" aria-label="Lihat matriks perubahan di halaman Alat Ukur">
+            <Card className="p-4 transition-shadow hover:shadow-md">
+              <div className="label-tech">
+                Perubahan sejak periode lalu · {formatMonthID(change.from)} → {formatMonthID(change.to)}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-8 gap-y-2 font-mono text-sm">
+                <span><b className="text-2xl" style={{ color: "var(--status-ok)" }}>{change.improved.length}</b> membaik</span>
+                <span><b className="text-2xl" style={{ color: "var(--status-danger)" }}>{change.worsened.length}</b> memburuk</span>
+                <span><b className="text-2xl">{change.added.length}</b> baru</span>
+                <span><b className="text-2xl">{change.removed.length}</b> hilang</span>
+              </div>
+            </Card>
+          </Link>
+        )}
         <ChartCard
           question="Kapan sertifikat & kalibrasi akan expire?"
           subtitle="Setiap titik adalah satu aset. Garis merah = hari ini. Klik titik untuk detail."
@@ -158,7 +177,7 @@ export function Overview() {
                     <td className="px-3 py-2">{a.name}</td>
                     <td className="px-3 py-2">{a.location ?? "—"}</td>
                     <td className="px-3 py-2">
-                      <StatusBadge status={a.compliance} torque={a.controlType === "TORQUE"} />
+                      <StatusBadge status={a.compliance} torque={a.controlType === "TORQUE"} asset={a} />
                     </td>
                     <td className="px-3 py-2">{formatDays(a.daysToExpiry)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">

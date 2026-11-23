@@ -475,3 +475,18 @@ Kerjakan bertahap. Setelah tiap fase, jalankan test/build dan beri ringkasan sin
 5. **Halaman Alat Angkat, Alat Ukur, Torque Wrench.**
 6. **Kualitas Data**, dialog "Perbarui Data" + IndexedDB, export CSV.
 7. **Polish**: motion, dark mode, responsif tablet/mobile, empty & loading state, aksesibilitas, `README.md` cara menjalankan dan cara memperbarui data.
+
+
+---
+
+## 13. Perubahan rev1 (menggantikan bagian terkait di atas)
+
+Berlaku untuk Bagian 3, 4.3, 4.4, 5, 8.4, 8.5 dan 11. Rincian: `docs/CHANGELOG.md`.
+
+- **Sumber data (3):** verifikasi multi-file di `public/data/verifikasi/`, daftar di `public/data/manifest.json`. Gabungan di-dedupe per `(assetId, period)`, file lebih baru menang. Upload verifikasi ditambahkan, bukan mengganti.
+- **Verifikasi (4.3):** dua format sheet. v1 (`RESULT (OK / NOT OK)`) per bulan; v2 sheet `Data` (`RESULT (GOOD / DAMAGE)` + `STATUS`), periode dari sel J1, berhenti saat kolom A bukan angka. Sheet `Summary` hanya dibandingkan (`SUMMARY_MISMATCH`), bukan sumber data. `Remarks` 10 digit = `poNumber`, lainnya = `note`.
+- **Torque (4.4):** sheet `Data` memuat kalibrasi eksternal torque wrench. Dua record sama hanya jika `torqueKey` (`nomor|Nm`) sama. Nomor sama tapi Nm beda = dua aset + `ID_CONFLICT`. ID kanonik = ID data verifikasi; ID lama di `aliases`. Aset yang hilang di periode terbaru = `MISSING_IN_LATEST`.
+- **Model (5):** `Asset` punya `complianceReason`, `isNewThisPeriod`, `measuringCategory`, `serialNumber`, `poNumber`, `aliases`, `calibrationStatus`, `externalCalibration`, `hasMonthlyCheck`. `DomainModel` punya `torqueCalibrations`, `verificationFiles`, `verificationMeta`, `latestPeriods`.
+- **Aturan alat ukur:** status di record terbaru mengalahkan hitungan tanggal (Need Calibration/On Progress → EXPIRED dengan alasan STATUS; On Progress → REPAIR; Damage → BREAKDOWN).
+- **UI (8.4, 8.5):** Alat Ukur punya KPI status, bar per kategori, matriks perubahan, panel vendor per PO. Torque punya dua indikator (cek bulanan + kalibrasi eksternal) dan panel Rekonsiliasi ID.
+- **Kualitas kode (11):** test rev1 di `tests/rev1.test.ts` memakai file asli.

@@ -17,7 +17,10 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { KpiCard } from "@/components/KpiCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useModel, useToday } from "@/lib/useModel";
-import { bayMap, torqueControlSeries, torqueKpi } from "@/domain/selectors";
+import { bayMap, torqueControlSeries, torqueKpi, torqueReconciliation, torqueAssetStats } from "@/domain/selectors";
+import { useFilteredAssets } from "@/lib/useModel";
+import { AssetTable } from "@/components/AssetTable";
+import { CALIBRATION_STATUS_LABEL } from "@/config/statusMaps";
 import { formatMonthID } from "@/lib/format";
 import { useAssetLink } from "@/lib/useAssetLink";
 import { CheckCircle2, XCircle, MinusCircle } from "lucide-react";
@@ -28,6 +31,9 @@ export function Torque() {
   const openAsset = useAssetLink();
 
   const kpi = useMemo(() => (model ? torqueKpi(model, today) : null), [model, today]);
+  const torqueAssets = useFilteredAssets("TORQUE");
+  const stats = useMemo(() => torqueAssetStats(model?.assets ?? []), [model]);
+  const reconciliation = useMemo(() => (model ? torqueReconciliation(model) : []), [model]);
   const bays = useMemo(() => (model ? bayMap(model, today) : { bays: [], nominals: [], cells: [] }), [model, today]);
   const assetIds = useMemo(
     () => [...new Set((model?.torqueSessions ?? []).map((s) => s.assetId))].sort(),
@@ -60,7 +66,7 @@ export function Torque() {
         <GlobalFilterBar hide={["vendor", "category", "usable"]} />
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <KpiCard label="Total Unit" value={kpi.total} />
+          <KpiCard label="Total Unit" value={stats.total} hint={stats.noMonthly > 0 ? `${stats.noMonthly} belum ada cek bulanan` : undefined} />
           <KpiCard label="Lolos" value={kpi.passThisMonth} tone="ok" />
           <KpiCard label="Tidak Lolos/Repair" value={kpi.failRepair} tone="danger" />
           <KpiCard label="Mulai Drift" value={kpi.drift} tone="urgent" />
@@ -76,6 +82,16 @@ export function Torque() {
             {bays.cells.map((cell) => (
               <div key={cell.bay} className="rounded-lg border p-3">
                 <div className="mb-2 text-sm font-semibold">{cell.bay}</div>
+                {(() => {
+                  const inBay = (model?.assets ?? []).filter((a) => a.controlType === "TORQUE" && a.location === cell.bay);
+                  const ext = inBay.filter((a) => a.externalCalibration);
+                  const ok = ext.filter((a) => a.externalCalibration?.status === "CALIBRATED").length;
+                  return (
+                    <div className="mb-2 text-xs text-muted-foreground" title="Status kalibrasi eksternal (data verifikasi)">
+                      {CALIBRATION_STATUS_LABEL.CALIBRATED}: {ok}/{ext.length}
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-col gap-1.5">
                   {bays.nominals.map((nm) => {
                     const slot = cell.byNominal[nm];
@@ -140,6 +156,40 @@ export function Torque() {
           </ResponsiveContainer>
         </ChartCard>
 
+        <ChartCard
+          question="Bagaimana status tiap torque wrench?"
+          subtitle="Cek bulanan (dari file torque) dan kalibrasi eksternal (dari data verifikasi) ditampilkan terpisah."
+          empty={torqueAssets.length === 0}
+        >
+          <AssetTable assets={torqueAssets} torque />
+        </ChartCard>
+        {reconciliation.length > 0 && (
+          <ChartCard
+            question="Rekonsiliasi ID"
+            subtitle="Nomor torque wrench yang berbeda antara file torque dan data verifikasi. Cocok hanya jika nomor dan Nm sama."
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-2 py-1 text-left font-medium">File torque</th>
+                    <th className="px-2 py-1 text-left font-medium">Data verifikasi</th>
+                    <th className="px-2 py-1 text-left font-medium">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reconciliation.map((r, i) => (
+                    <tr key={i} className="border-t align-top">
+                      <td className="px-2 py-1 font-mono text-xs">{r.fileSide}</td>
+                      <td className="px-2 py-1 font-mono text-xs">{r.verifSide}</td>
+                      <td className="px-2 py-1 text-xs">{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ChartCard>
+        )}
         <ChartCard question="Bagaimana pass rate torque per bulan?" empty={series.length === 0}>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={passRate(model, today)}>

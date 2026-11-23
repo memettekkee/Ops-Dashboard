@@ -6,10 +6,12 @@ import { CommandSearch } from "./CommandSearch";
 import { UpdateDataDialog } from "./UpdateDataDialog";
 import { MobileNav } from "./MobileNav";
 import { useDataStore } from "@/store/useDataStore";
+import { formatMonthID } from "@/lib/format";
 import { useThemeStore } from "@/store/useTheme";
 
 export function TopBar({ title }: { title: string }) {
   const { dataAsOf, source, resetToDefault } = useDataStore();
+  const latest = useDataStore((s) => s.model?.latestPeriods);
   const { theme, setTheme } = useThemeStore();
 
   const asOf = dataAsOf ? format(new Date(dataAsOf), "d MMM yyyy HH:mm", { locale: idLocale }) : "—";
@@ -20,7 +22,12 @@ export function TopBar({ title }: { title: string }) {
       <h1 className="text-lg font-bold tracking-tight">{title}</h1>
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden text-right text-xs text-muted-foreground lg:block">
-          <div>Data per: {asOf}</div>
+          <div>
+            Data per:{" "}
+            {latest?.verifikasi || latest?.torque
+              ? `Verifikasi: ${latest.verifikasi ? formatMonthID(latest.verifikasi) : "—"} · Torque: ${latest.torque ? formatMonthID(latest.torque) : "—"} · Sertifikasi: ${asOf}`
+              : asOf}
+          </div>
           {source === "uploaded" && (
             <button onClick={() => void resetToDefault()} className="inline-flex items-center gap-1 hover:text-foreground">
               <RotateCcw className="size-3" /> Kembalikan ke data bawaan

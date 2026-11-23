@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, addMonths } from "date-fns";
 import type {
+  CalibrationStatus,
   ComplianceStatus,
   PhysicalCondition,
   TorqueSession,
@@ -178,4 +179,43 @@ export function torqueDeviation(session: TorqueSession): TorqueDeviation {
   }
   const marginPct = range > 0 ? (minMargin / range) * 100 : 0;
   return { target, deviationPct, marginPct };
+}
+
+/**
+ * rev1: the status in the latest verification record decides the status of a measuring tool,
+ * overriding the date-based calculation.
+ */
+export function measuringStatusOverride(status: CalibrationStatus | undefined): {
+  compliance?: ComplianceStatus;
+  condition?: PhysicalCondition;
+} {
+  switch (status) {
+    case "NEED_CALIBRATION":
+      return { compliance: "EXPIRED" };
+    case "ON_PROGRESS":
+      return { compliance: "EXPIRED", condition: "REPAIR" };
+    case "DAMAGE":
+      return { condition: "BREAKDOWN" };
+    default:
+      return {};
+  }
+}
+
+/** "TW-BRC-ST-213-135NM" => "213". */
+export function torqueNumber(id: string): string | null {
+  return id.toUpperCase().match(/^TW-BRC-(?:ST-)?(\d+)/)?.[1] ?? null;
+}
+
+/** Nominal torque from the "-135NM" suffix or a "(1250NM)" group. */
+export function torqueNominalFromId(id: string): number | null {
+  const u = id.toUpperCase();
+  const m = u.match(/-(\d+)\s*NM$/) ?? u.match(/\((\d+)\s*NM\)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** "<number>|<nominalNm>". Two torque records are the same wrench only when the whole key is equal. */
+export function torqueKey(id: string, nominalFallback?: number | null): string | null {
+  const num = torqueNumber(id);
+  const nm = torqueNominalFromId(id) ?? nominalFallback ?? null;
+  return num && nm ? `${num}|${nm}` : null;
 }

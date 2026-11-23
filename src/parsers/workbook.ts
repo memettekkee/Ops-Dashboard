@@ -14,6 +14,21 @@ export function workbookToBook(data: ArrayBuffer | Uint8Array): SheetBook {
       defval: null,
       blankrows: true,
     });
+    // Surface formula-error cells (#VALUE!, #REF!, ...) as text so parsers can flag them.
+    const ref = ws["!ref"];
+    if (ref) {
+      const range = XLSX.utils.decode_range(ref);
+      for (const key of Object.keys(ws)) {
+        if (key[0] === "!") continue;
+        const cell = ws[key] as XLSX.CellObject;
+        if (cell.t !== "e") continue;
+        const addr = XLSX.utils.decode_cell(key);
+        const r = addr.r - range.s.r;
+        const c = addr.c - range.s.c;
+        if (!rows[r]) rows[r] = [];
+        rows[r][c] = cell.w ?? "#ERROR!";
+      }
+    }
     book[name] = rows;
   }
   return book;

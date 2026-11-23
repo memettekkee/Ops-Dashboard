@@ -52,6 +52,19 @@ export interface Asset {
   sources: string[];
   prPo?: string;
   processStage?: string;
+  // rev1
+  complianceReason?: "DATE" | "STATUS";
+  isNewThisPeriod?: boolean;
+  measuringCategory?: string;
+  serialNumber?: string;
+  poNumber?: string;
+  aliases?: string[];
+  calibrationStatus?: CalibrationStatus;
+  lastCalibration?: Date;
+  /** Torque wrench: has at least one monthly check (from torque file). */
+  hasMonthlyCheck?: boolean;
+  /** Torque wrench: external calibration from verification file. */
+  externalCalibration?: { status: CalibrationStatus; lastCalibration?: Date; period: string };
 }
 
 export interface CertificationRecord {
@@ -76,6 +89,13 @@ export interface MeasuringCalibration {
   remark?: string;
 }
 
+export type CalibrationStatus =
+  | "CALIBRATED"
+  | "NEED_CALIBRATION"
+  | "ON_PROGRESS"
+  | "DAMAGE"
+  | "UNKNOWN";
+
 export interface VerificationRecord {
   assetId: string;
   period: string; // "2026-10"
@@ -83,6 +103,16 @@ export interface VerificationRecord {
   result: VerificationResult;
   remark?: string;
   lastCalibration?: Date | null;
+  // rev1
+  format: "v1" | "v2";
+  group?: "MEASUREMENT" | "TORQUE";
+  physicalResult?: "GOOD" | "DAMAGE";
+  calibrationStatus?: CalibrationStatus;
+  poNumber?: string;
+  note?: string;
+  sourceFile: string;
+  name?: string;
+  brand?: string;
 }
 
 export interface TorqueSession {
@@ -113,15 +143,37 @@ export type DataIssueType =
   | "MISSING_PERIOD"
   | "EMPTY_RESULTS"
   | "UNMAPPED_VALUE"
-  | "INVALID_ID";
+  | "INVALID_ID"
+  | "ID_CONFLICT"
+  | "MISSING_IN_LATEST"
+  | "STATUS_DATE_CONFLICT"
+  | "LAST_CAL_AFTER_CHECK"
+  | "SUMMARY_MISMATCH"
+  | "NON_STANDARD_ID"
+  | "FORMULA_ERROR";
 
 export interface DataIssue {
   id: string;
   severity: "high" | "medium" | "low";
   type: DataIssueType;
   assetId?: string;
+  /** Other assets involved (e.g. the other side of an ID_CONFLICT). */
+  relatedAssetIds?: string[];
   source: string;
   message: string;
+}
+
+export interface VerificationFileInfo {
+  name: string;
+  periods: string[];
+  origin?: "default" | "uploaded";
+}
+
+export interface VerificationReportMeta {
+  period: string;
+  sourceFile: string;
+  inspectedBy: string[];
+  checkedBy?: string;
 }
 
 /** Everything the UI needs, produced by the parse pipeline. */
@@ -129,10 +181,16 @@ export interface DomainModel {
   assets: Asset[];
   certifications: CertificationRecord[];
   calibrations: MeasuringCalibration[];
+  /** Merged measuring verification records (deduped per asset+period; newer file wins). */
   verifications: VerificationRecord[];
+  /** External calibration records of torque wrenches (from the verification `Data` sheet). */
+  torqueCalibrations: VerificationRecord[];
   torqueSessions: TorqueSession[];
   issues: DataIssue[];
   dataAsOf?: string; // ISO date string
+  verificationFiles: VerificationFileInfo[];
+  verificationMeta: VerificationReportMeta[];
+  latestPeriods: { verifikasi?: string; torque?: string };
 }
 
 export interface ParseResult<T> {

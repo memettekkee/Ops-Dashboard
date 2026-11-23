@@ -28,6 +28,13 @@ const TYPE_LABEL: Record<DataIssue["type"], string> = {
   EMPTY_RESULTS: "Hasil Kosong",
   UNMAPPED_VALUE: "Nilai Tidak Dikenali",
   INVALID_ID: "ID Tidak Valid",
+  ID_CONFLICT: "Konflik Nomor ID",
+  MISSING_IN_LATEST: "Hilang di Periode Terbaru",
+  STATUS_DATE_CONFLICT: "Status vs Tanggal Bentrok",
+  LAST_CAL_AFTER_CHECK: "Kalibrasi Setelah Tanggal Cek",
+  SUMMARY_MISMATCH: "Summary Tidak Cocok",
+  NON_STANDARD_ID: "ID Tidak Standar",
+  FORMULA_ERROR: "Error Rumus Excel",
 };
 
 export function DataQuality() {

@@ -35,7 +35,7 @@ export function CommandSearch() {
           {(model?.assets ?? []).slice(0, 400).map((a) => (
             <CommandItem
               key={a.id}
-              value={`${a.id} ${a.name}`}
+              value={`${a.id} ${a.name} ${(a.aliases ?? []).join(" ")} ${a.serialNumber ?? ""}`}
               onSelect={() => {
                 openAsset(a.id);
                 setOpen(false);

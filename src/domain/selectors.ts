@@ -1,5 +1,7 @@
 import type {
   Asset,
+  CalibrationStatus,
+  VerificationRecord,
   ComplianceStatus,
   DomainModel,
   TorqueSession,
@@ -7,6 +9,7 @@ import type {
 } from "./types";
 import { torqueCompliance, torqueDeviation } from "./rules";
 import { DRIFT_MARGIN_PCT } from "@/config/thresholds";
+import { calibrationStatusFromResult } from "@/config/statusMaps";
 
 export interface KpiSummary {
   total: number;
@@ -308,4 +311,175 @@ export function torqueKpi(model: DomainModel, today: Date): TorqueKpi {
     drift: torqueDriftFlags(model).size,
     overdue,
   };
+}
+
+// ---- rev1: calibration status per period ----
+export const CAL_STATUS_ORDER: CalibrationStatus[] = [
+  "CALIBRATED",
+  "NEED_CALIBRATION",
+  "ON_PROGRESS",
+  "DAMAGE",
+  "UNKNOWN",
+];
+
+export type StatusOrNone = CalibrationStatus | "NONE";
+
+/** v2 records carry the status; v1 results are mapped to the closest status. */
+export function recordStatus(v: VerificationRecord): CalibrationStatus {
+  return v.calibrationStatus ?? calibrationStatusFromResult(v.result);
+}
+
+export function measuringPeriods(model: DomainModel): string[] {
+  return [...new Set(model.verifications.map((v) => v.period))].sort();
+}
+
+export function isV2Period(model: DomainModel, period: string): boolean {
+  return model.verifications.some((v) => v.period === period && v.format === "v2");
+}
+
+export function statusByAsset(model: DomainModel, period: string): Map<string, CalibrationStatus> {
+  const m = new Map<string, CalibrationStatus>();
+  for (const v of model.verifications) if (v.period === period) m.set(v.assetId, recordStatus(v));
+  return m;
+}
+
+export interface StatusTransitions {
+  cells: Map<string, string[]>; // `${from}>${to}` -> asset ids
+}
+
+export function statusTransitions(model: DomainModel, from: string, to: string): StatusTransitions {
+  const a = statusByAsset(model, from);
+  const b = statusByAsset(model, to);
+  const cells = new Map<string, string[]>();
+  for (const id of new Set([...a.keys(), ...b.keys()])) {
+    const k = `${a.get(id) ?? "NONE"}>${b.get(id) ?? "NONE"}`;
+    cells.set(k, [...(cells.get(k) ?? []), id]);
+  }
+  for (const list of cells.values()) list.sort();
+  return { cells };
+}
+
+const RANK: Record<StatusOrNone, number> = {
+  CALIBRATED: 3,
+  ON_PROGRESS: 2,
+  NEED_CALIBRATION: 1,
+  UNKNOWN: 0.5,
+  DAMAGE: 0,
+  NONE: -1,
+};
+
+export interface ChangeSummary {
+  from?: string;
+  to?: string;
+  improved: string[];
+  worsened: string[];
+  added: string[];
+  removed: string[];
+}
+
+/** Compare the two most recent measuring periods. */
+export function changeSummary(model: DomainModel): ChangeSummary {
+  const periods = measuringPeriods(model);
+  const out: ChangeSummary = { improved: [], worsened: [], added: [], removed: [] };
+  if (periods.length < 2) return out;
+  out.from = periods[periods.length - 2];
+  out.to = periods[periods.length - 1];
+  const { cells } = statusTransitions(model, out.from, out.to);
+  for (const [k, ids] of cells) {
+    const [f, t] = k.split(">") as [StatusOrNone, StatusOrNone];
+    if (f === t) continue;
+    if (f === "NONE") out.added.push(...ids);
+    else if (t === "NONE") out.removed.push(...ids);
+    else if (RANK[t] > RANK[f]) out.improved.push(...ids);
+    else out.worsened.push(...ids);
+  }
+  return out;
+}
+
+export interface VendorGroup {
+  po: string;
+  assets: Asset[];
+}
+
+/** Measuring tools being calibrated by a vendor, grouped by PO number. */
+export function vendorGroups(assets: Asset[]): VendorGroup[] {
+  const by = new Map<string, Asset[]>();
+  for (const a of assets) {
+    if (a.calibrationStatus !== "ON_PROGRESS") continue;
+    const po = a.poNumber ?? "Tanpa PO";
+    by.set(po, [...(by.get(po) ?? []), a]);
+  }
+  return [...by.entries()]
+    .map(([po, list]) => ({ po, assets: list.sort((x, y) => x.id.localeCompare(y.id)) }))
+    .sort((a, b) => b.assets.length - a.assets.length);
+}
+
+/** Stacked-bar data: per measuring category, count per calibration status. */
+export function categoryStatusCounts(
+  assets: Asset[],
+): { category: string; total: number; counts: Record<CalibrationStatus, number> }[] {
+  const by = new Map<string, Record<CalibrationStatus, number>>();
+  for (const a of assets) {
+    const cat = a.measuringCategory ?? "Lainnya";
+    const row = by.get(cat) ?? { CALIBRATED: 0, NEED_CALIBRATION: 0, ON_PROGRESS: 0, DAMAGE: 0, UNKNOWN: 0 };
+    row[a.calibrationStatus ?? "UNKNOWN"]++;
+    by.set(cat, row);
+  }
+  return [...by.entries()]
+    .map(([category, counts]) => ({
+      category,
+      counts,
+      total: Object.values(counts).reduce((x, y) => x + y, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Torque wrenches (incl. those without monthly sessions). */
+export function torqueAssetStats(assets: Asset[]) {
+  const t = assets.filter((a) => a.controlType === "TORQUE");
+  return {
+    total: t.length,
+    noMonthly: t.filter((a) => !a.hasMonthlyCheck).length,
+  };
+}
+
+export interface ReconciliationRow {
+  kind: "ID_CONFLICT" | "MISSING_IN_LATEST" | "NEW";
+  fileSide: string;
+  verifSide: string;
+  note: string;
+}
+
+/** Rows for the torque "Rekonsiliasi ID" panel: conflicts, missing wrenches and new wrenches. */
+export function torqueReconciliation(model: DomainModel): ReconciliationRow[] {
+  const cap = (id: string) => {
+    const a = model.assets.find((x) => x.id === id);
+    return a?.capacityLabel ? `${id} (${a.capacityLabel})` : id;
+  };
+  const rows: ReconciliationRow[] = [];
+  const conflicted = new Set<string>();
+  for (const i of model.issues) {
+    if (i.type === "ID_CONFLICT" && i.assetId) {
+      conflicted.add(i.assetId);
+      rows.push({
+        kind: "ID_CONFLICT",
+        fileSide: (i.relatedAssetIds ?? []).map(cap).join(", ") || "—",
+        verifSide: cap(i.assetId),
+        note: i.message,
+      });
+    } else if (i.type === "MISSING_IN_LATEST" && i.assetId?.startsWith("TW-")) {
+      rows.push({ kind: "MISSING_IN_LATEST", fileSide: cap(i.assetId), verifSide: "—", note: i.message });
+    }
+  }
+  for (const a of model.assets) {
+    if (a.controlType === "TORQUE" && !a.hasMonthlyCheck && !conflicted.has(a.id)) {
+      rows.push({
+        kind: "NEW",
+        fileSide: "—",
+        verifSide: cap(a.id),
+        note: "Torque wrench baru di data verifikasi; belum ada cek bulanan.",
+      });
+    }
+  }
+  return rows;
 }

@@ -6,7 +6,7 @@ import { useDataStore } from "@/store/useDataStore";
 import { UsableBadge } from "./UsableBadge";
 import { StatusBadge } from "./StatusBadge";
 import { formatDateID, formatMonthID } from "@/lib/format";
-import { VERIFICATION_LABEL } from "@/config/statusMaps";
+import { CALIBRATION_STATUS_LABEL, VERIFICATION_LABEL } from "@/config/statusMaps";
 import { torqueDeviation } from "@/domain/rules";
 import type { Asset } from "@/domain/types";
 
@@ -61,13 +61,15 @@ function AssetDetail({ asset }: { asset: Asset }) {
         ? "Alat Ukur"
         : "Torque Wrench";
 
-  const verifications = (model?.verifications ?? [])
+  const verifications = [...(model?.verifications ?? []), ...(model?.torqueCalibrations ?? [])]
     .filter((v) => v.assetId === asset.id)
     .sort((a, b) => b.period.localeCompare(a.period));
   const torqueSessions = (model?.torqueSessions ?? [])
     .filter((s) => s.assetId === asset.id)
     .sort((a, b) => b.period.localeCompare(a.period) || b.sessionIndex - a.sessionIndex);
-  const issues = (model?.issues ?? []).filter((i) => i.assetId === asset.id);
+  const issues = (model?.issues ?? []).filter(
+    (i) => i.assetId === asset.id || i.relatedAssetIds?.includes(asset.id),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,7 +79,7 @@ function AssetDetail({ asset }: { asset: Asset }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="label-tech rounded border px-2 py-0.5">{typeLabel}</span>
-        <StatusBadge status={asset.compliance} torque={asset.controlType === "TORQUE"} />
+        <StatusBadge status={asset.compliance} torque={asset.controlType === "TORQUE"} asset={asset} />
       </div>
       <UsableBadge usable={asset.usable} large />
       {!asset.usable.ok && (
@@ -105,7 +107,25 @@ function AssetDetail({ asset }: { asset: Asset }) {
           }
         />
         <Field label="Inspeksi Terakhir" value={formatDateID(asset.lastInspection)} />
-        <Field label="PR/PO" value={asset.prPo} />
+        <Field label="PR/PO" value={asset.poNumber ?? asset.prPo} />
+        {asset.serialNumber && <Field label="Nomor Seri" value={asset.serialNumber} />}
+        {asset.measuringCategory && <Field label="Kategori Alat Ukur" value={asset.measuringCategory} />}
+        {asset.calibrationStatus && (
+          <Field label="Status Kalibrasi" value={CALIBRATION_STATUS_LABEL[asset.calibrationStatus]} />
+        )}
+        {asset.lastCalibration && <Field label="Kalibrasi Terakhir" value={formatDateID(asset.lastCalibration)} />}
+        {asset.aliases && asset.aliases.length > 0 && <Field label="ID Lama" value={asset.aliases.join(", ")} />}
+        {asset.externalCalibration && (
+          <Field
+            label="Kalibrasi Eksternal"
+            value={`${CALIBRATION_STATUS_LABEL[asset.externalCalibration.status]}${
+              asset.externalCalibration.lastCalibration
+                ? ` · ${formatDateID(asset.externalCalibration.lastCalibration)}`
+                : ""
+            }`}
+          />
+        )}
+        {asset.hasMonthlyCheck === false && <Field label="Cek Bulanan" value="Belum ada cek bulanan" />}
       </div>
 
       {verifications.length > 0 && (
@@ -115,9 +135,17 @@ function AssetDetail({ asset }: { asset: Asset }) {
             <h3 className="label-tech mb-2">Riwayat Verifikasi</h3>
             <div className="flex flex-col gap-1">
               {verifications.map((v) => (
-                <div key={v.period} className="flex items-center justify-between text-sm">
+                <div
+                  key={`${v.sourceFile}|${v.period}`}
+                  className="flex items-center justify-between text-sm"
+                  title={`Sumber: ${v.sourceFile}${v.format === "v2" ? " (format baru)" : ""}`}
+                >
                   <span>{formatMonthID(v.period)}</span>
-                  <span>{VERIFICATION_LABEL[v.result]}</span>
+                  <span>
+                    {v.format === "v2" && v.calibrationStatus
+                      ? CALIBRATION_STATUS_LABEL[v.calibrationStatus]
+                      : VERIFICATION_LABEL[v.result]}
+                  </span>
                 </div>
               ))}
             </div>
