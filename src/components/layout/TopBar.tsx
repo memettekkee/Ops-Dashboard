@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { CommandSearch } from "./CommandSearch";
-import { UpdateDataDialog } from "./UpdateDataDialog";
 import { MobileNav } from "./MobileNav";
 import { useDataStore } from "@/store/useDataStore";
 import { formatMonthID } from "@/lib/format";
@@ -35,7 +34,6 @@ export function TopBar({ title }: { title: string }) {
           )}
         </div>
         <CommandSearch />
-        <UpdateDataDialog />
         <Button
           variant="ghost"
           size="icon"
